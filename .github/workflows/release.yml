@@ -1,0 +1,84 @@
+name: Build & Release
+
+# Dispara em:
+#   - push para main (gera artefato de CI)
+#   - push de tag vX.Y.Z  (gera GitHub Release + artefato)
+#   - pull request para main (valida o build)
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write   # necessário para criar Releases
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. MSBuild (Visual Studio Build Tools, incluso no runner) ────────────
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # ── 3. Baixar IV-SDK .NET e copiar DLLs de referência ────────────────────
+      - name: Setup IV-SDK .NET
+        shell: pwsh
+        env:
+          IVSDK_VER: '1.9.1'
+        run: |
+          $ver = $env:IVSDK_VER
+          $url = "https://github.com/ClonkAndre/IV-SDK-DotNet/releases/download/$ver/IV-SDK.NET.v$ver.zip"
+          $zip = "libs/IV-SDK.NET.v$ver.zip"
+
+          New-Item -ItemType Directory -Force libs    | Out-Null
+          New-Item -ItemType Directory -Force scripts | Out-Null
+
+          Write-Host "==> Baixando IV-SDK .NET $ver..."
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+
+          Write-Host "==> Extraindo..."
+          Expand-Archive -Force $zip libs/IV-SDK-DotNet
+
+          Copy-Item libs/IV-SDK-DotNet/IVSDKDotNetWrapper.dll              scripts/
+          Copy-Item libs/IV-SDK-DotNet/IVSDKDotNet/bin/Newtonsoft.Json.dll scripts/
+          Write-Host "==> DLLs de referência prontas."
+
+      # ── 4. Compilar ──────────────────────────────────────────────────────────
+      - name: Build ChaosScript.dll
+        shell: cmd
+        run: |
+          cd ChaosScript
+          msbuild ChaosScript.csproj ^
+            /p:Configuration=Release ^
+            /p:Platform=x86 ^
+            /p:OutputPath=..\scripts\ ^
+            /verbosity:minimal
+
+      # ── 5. Publicar artefato de CI (em todo push/PR) ─────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveChaos-net-dll
+          path: |
+            scripts/LiveChaos.net.dll
+            scripts/IVSDKDotNetWrapper.dll
+            scripts/Newtonsoft.Json.dll
+          if-no-files-found: error
+
+      # ── 6. Criar GitHub Release (apenas em tags vX.Y.Z) ─────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            scripts/LiveChaos.net.dll
+            scripts/IVSDKDotNetWrapper.dll
+            scripts/Newtonsoft.Json.dll

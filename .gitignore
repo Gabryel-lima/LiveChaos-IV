@@ -1,0 +1,35 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+
+# ─── Secrets ─────────────────────────────────────────────────────────────────
+.env
+
+# ─── .NET / MSBuild build output ─────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+*.user
+.vs/
+*.DotSettings.user
+
+# ─── Downloaded SDK (run `make setup`) ───────────────────────────────────────
+libs/
+#*.zip
+
+# ─── Game binary files — NOT redistributable, install manually (see README) ──
+Main_GTAIV_Folder/
+*.asi
+
+# ─── Logs ────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── OS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
