@@ -1,6 +1,6 @@
 module github.com/gabryel-lima/livechaos-iv/server
 
-go 1.22
+go 1.23.0
 
 require (
 	github.com/BurntSushi/toml v1.3.2
@@ -10,8 +10,8 @@ require (
 )
 
 require (
-	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
 )
 
 // YouTube Data API v3 — used by server/bot/youtube.go
