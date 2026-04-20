@@ -59,24 +59,24 @@ jobs:
 
       # ── 5. Compilar ChaosScript (legado) ─────────────────────────────────────
       - name: Build ChaosScript.dll
-        shell: cmd
+        shell: pwsh
         run: |
           cd ChaosScript
-          msbuild ChaosScript.csproj ^
-            /p:Configuration=Release ^
-            /p:Platform=x86 ^
-            /p:OutputPath=..\scripts\ ^
+          msbuild ChaosScript.csproj `
+            /p:Configuration=Release `
+            /p:Platform=x86 `
+            /p:OutputPath=..\scripts\ `
             /verbosity:minimal
 
       # ── 6. Compilar mod/ (novo — PipeClient + HUD + EffectRunner) ───────────
       - name: Build mod/LiveChaos.net.dll
-        shell: cmd
+        shell: pwsh
         run: |
           cd mod
-          msbuild LiveChaos.csproj ^
-            /p:Configuration=Release ^
-            /p:Platform=x86 ^
-            /p:OutputPath=..\scripts\ ^
+          msbuild LiveChaos.csproj `
+            /p:Configuration=Release `
+            /p:Platform=x86 `
+            /p:OutputPath=..\scripts\ `
             /verbosity:minimal
 
       # ── 7. Compilar servidor Go ──────────────────────────────────────────────
