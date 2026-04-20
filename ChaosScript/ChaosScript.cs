@@ -14,10 +14,8 @@ using static IVSDKDotNet.Native.Natives;
 //  O bot envia o nome do efeito como string terminada em '\n'
 // ============================================================
 
-namespace LiveChaos
-{
-    public class ChaosScript : Script
-    {
+namespace LiveChaos {
+    public class ChaosScript : Script {
         // ------- configuração do socket -------
         private const string HOST = "127.0.0.1";
         private const int    PORT = 9999;
@@ -40,8 +38,7 @@ namespace LiveChaos
         // ============================================================
         //  CONSTRUCTOR
         // ============================================================
-        public ChaosScript()
-        {
+        public ChaosScript() {
             Initialized  += OnInitialized;
             Uninitialize += OnUninitialize;
             Tick         += OnTick;
@@ -50,62 +47,52 @@ namespace LiveChaos
         // ============================================================
         //  LIFECYCLE
         // ============================================================
-        private void OnInitialized(object sender, EventArgs e)
-        {
+        private void OnInitialized(object sender, EventArgs e) {
             Thread receiver = new Thread(ReceiveLoop) { IsBackground = true };
             receiver.Start();
         }
 
-        private void OnUninitialize(object sender, EventArgs e)
-        {
+        private void OnUninitialize(object sender, EventArgs e) {
             try { _client?.Close(); } catch { }
         }
 
         // ============================================================
         //  THREAD DE REDE  (nunca bloqueia o game loop)
         // ============================================================
-        private void ReceiveLoop()
-        {
-            while (true)
-            {
-                try
-                {
+        private void ReceiveLoop() {
+            while (true) {
+                try {
                     if (_client == null || !_client.Connected)
                         Connect();
 
                     int bytesRead = _stream.Read(_buffer, 0, _buffer.Length);
-                    if (bytesRead > 0)
-                    {
+                    if (bytesRead > 0) {
                         string msg = Encoding.UTF8.GetString(_buffer, 0, bytesRead).Trim();
-                        if (!string.IsNullOrEmpty(msg))
-                        {
-                            lock (_lock)
-                            {
+                        if (!string.IsNullOrEmpty(msg)) {
+                            lock (_lock) {
                                 // Último efeito recebido vence
                                 _pending = msg;
                             }
                         }
                     }
                 }
-                catch
-                {
+                catch (Exception ex) {
                     // Reconecta após falha
+                    IVSDKDotNet.IVGame.Console.Print($"[ChaosScript] socket error: {ex.Message} — reconnecting");
                     _client = null;
                     Thread.Sleep(2000);
                 }
             }
         }
 
-        private void Connect()
-        {
-            try
-            {
+        private void Connect() {
+            try {
                 _client = new TcpClient();
                 _client.Connect(HOST, PORT);
                 _stream = _client.GetStream();
             }
-            catch
-            {
+            catch (Exception ex) {
+                IVSDKDotNet.IVGame.Console.Print($"[ChaosScript] failed to connect: {ex.Message} — retrying");
                 _client = null;
                 Thread.Sleep(2000);
             }
@@ -114,8 +101,7 @@ namespace LiveChaos
         // ============================================================
         //  GAME TICK  (roda na main thread do GTA IV)
         // ============================================================
-        private void OnTick(object sender, EventArgs e)
-        {
+        private void OnTick(object sender, EventArgs e) {
             // Resolve player
             int playerIdx = CONVERT_INT_TO_PLAYERINDEX(GET_PLAYER_ID());
             GET_PLAYER_CHAR(playerIdx, out int playerHandle);
@@ -123,19 +109,15 @@ namespace LiveChaos
 
             // Throttle: não executar efeito a cada frame
             int now = Environment.TickCount;
-            if (now - _lastEffectTick >= EFFECT_COOLDOWN_MS)
-            {
+            if (now - _lastEffectTick >= EFFECT_COOLDOWN_MS) {
                 string effect = null;
-                lock (_lock)
-                {
-                    if (!string.IsNullOrEmpty(_pending))
-                    {
+                lock (_lock) {
+                    if (!string.IsNullOrEmpty(_pending)) {
                         effect   = _pending;
                         _pending = "";
                     }
                 }
-                if (effect != null)
-                {
+                if (effect != null) {
                     ExecuteEffect(effect, playerHandle, playerIdx, playerPos);
                     _lastEffectTick = now;
                 }
@@ -148,10 +130,8 @@ namespace LiveChaos
         // ============================================================
         //  DISPATCHER DE EFEITOS
         // ============================================================
-        private void ExecuteEffect(string effect, int playerHandle, int playerIdx, Vector3 playerPos)
-        {
-            switch (effect.ToLower())
-            {
+        private void ExecuteEffect(string effect, int playerHandle, int playerIdx, Vector3 playerPos) {
+            switch (effect.ToLower()) {
                 case "turbo":
                     ApplyTurboToNPCVehicles(playerHandle, playerPos);
                     break;
@@ -203,16 +183,14 @@ namespace LiveChaos
         //  EFEITOS
         // ============================================================
 
-        private void ApplyTurboToNPCVehicles(int playerHandle, Vector3 playerPos)
-        {
+        private void ApplyTurboToNPCVehicles(int playerHandle, Vector3 playerPos) {
             int  playerCarHandle = 0;
-            bool inVehicle       = IS_CHAR_IN_ANY_CAR(playerHandle);
+            bool inVehicle = IS_CHAR_IN_ANY_CAR(playerHandle);
             if (inVehicle)
                 GET_CAR_CHAR_IS_USING(playerHandle, out playerCarHandle);
 
             IVPool pool = IVPools.GetVehiclePool();
-            for (int i = 0; i < pool.Count; i++)
-            {
+            for (int i = 0; i < pool.Count; i++) {
                 UIntPtr ptr = pool.Get(i);
                 if (ptr == UIntPtr.Zero) continue;
 
@@ -236,16 +214,14 @@ namespace LiveChaos
             }
         }
 
-        private void ElevatePeds(int playerHandle, Vector3 playerPos)
-        {
+        private void ElevatePeds(int playerHandle, Vector3 playerPos) {
             // Eleva o próprio player
             SET_CHAR_COORDINATES(playerHandle,
                 new Vector3(playerPos.X, playerPos.Y, playerPos.Z + 3.0f));
 
             UIntPtr playerPedPtr = IVPlayerInfo.FindThePlayerPed();
             IVPool  pool         = IVPools.GetPedPool();
-            for (int i = 0; i < pool.Count; i++)
-            {
+            for (int i = 0; i < pool.Count; i++) {
                 UIntPtr ptr = pool.Get(i);
                 if (ptr == UIntPtr.Zero || ptr == playerPedPtr) continue;
 
@@ -260,12 +236,10 @@ namespace LiveChaos
             }
         }
 
-        private void RagdollNearbyPeds(int playerHandle, Vector3 playerPos)
-        {
+        private void RagdollNearbyPeds(int playerHandle, Vector3 playerPos) {
             UIntPtr playerPedPtr = IVPlayerInfo.FindThePlayerPed();
             IVPool  pool         = IVPools.GetPedPool();
-            for (int i = 0; i < pool.Count; i++)
-            {
+            for (int i = 0; i < pool.Count; i++) {
                 UIntPtr ptr = pool.Get(i);
                 if (ptr == UIntPtr.Zero || ptr == playerPedPtr) continue;
 
@@ -279,16 +253,14 @@ namespace LiveChaos
             }
         }
 
-        private void ExplodeNPCCars(int playerHandle, Vector3 playerPos)
-        {
+        private void ExplodeNPCCars(int playerHandle, Vector3 playerPos) {
             int  playerCarHandle = 0;
             bool inVehicle       = IS_CHAR_IN_ANY_CAR(playerHandle);
             if (inVehicle)
                 GET_CAR_CHAR_IS_USING(playerHandle, out playerCarHandle);
 
             IVPool pool = IVPools.GetVehiclePool();
-            for (int i = 0; i < pool.Count; i++)
-            {
+            for (int i = 0; i < pool.Count; i++) {
                 UIntPtr ptr = pool.Get(i);
                 if (ptr == UIntPtr.Zero) continue;
 
@@ -303,10 +275,8 @@ namespace LiveChaos
             }
         }
 
-        private void GiveRandomWeapon(int playerHandle)
-        {
-            int[] weapons =
-            {
+        private void GiveRandomWeapon(int playerHandle) {
+            int[] weapons = {
                 (int)eWeaponType.WEAPON_SHOTGUN,
                 (int)eWeaponType.WEAPON_M4,
                 (int)eWeaponType.WEAPON_SNIPERRIFLE,

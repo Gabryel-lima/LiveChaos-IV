@@ -1,58 +1,75 @@
 # LiveChaos-IV
 
-Um **mod de caos interativo** para **GTA IV** controlado pela audiência da sua live no Twitch e/ou YouTube.
+Um **mod de caos interativo** para **GTA IV** controlado pela audiência da sua live no **Twitch** e/ou **YouTube**.
 
-Os espectadores votam no chat (digitando `1`, `2` ou `3`) para escolher qual efeito será ativado no jogo a cada rodada.
+Os espectadores votam no chat com `!vote EFEITO` para escolher qual efeito será ativado no jogo a cada rodada.
 
 ---
 
-## Como Funciona
+## Arquitetura
+
+O sistema é composto por **3 componentes** independentes que se comunicam em tempo real:
 
 ```
-Chat do Twitch ──┐
-                 ├──► chaos_bot.py (servidor TCP Python)  ──:9999──►  ChaosScript.dll (mod GTA IV)
-Chat do YouTube ─┘         │                                                   │
-                            └── contabiliza votos a cada N segundos            └── aplica o efeito no jogo
+Chat do Twitch ──┐                                                   ┌── mod C# (GTA IV)
+                 ├──► Servidor Go ──── named pipe (JSON) ───────────►│    PipeClient → EffectRunner → HUD
+Chat do YouTube ─┘    │  (Twitch IRC + YouTube API)                  └── aplica efeitos no jogo
+                      │
+                      └──── WebSocket :9001/ws ─────────────────────►  OBS overlay (Lua)
+                      └──── HTTP GET  :9001/state                       (texto + barra de timer)
 ```
 
-O bot Python funciona como um **servidor TCP**. O mod C# do GTA IV conecta-se como cliente na inicialização, e o bot envia o nome do efeito vencedor como uma string terminada em newline.
+| Componente | Linguagem | Responsabilidade |
+|---|---|---|
+| **Servidor** (`server/`) | Go 1.22+ | Twitch IRC, YouTube polling, votação, timer, IPC (named pipe) e WebSocket para OBS |
+| **Mod** (`mod/`) | C# .NET 4.8 | Recebe efeitos via named pipe, executa natives do GTA IV, desenha HUD in-game |
+| **Overlay** (`obs/`) | Lua 5.1 | Atualiza fontes de texto/barra de timer no OBS via polling HTTP |
+
+> O bot Python (`bot/chaos_bot.py`) foi **aposentado** — o servidor Go o substituiu integralmente.
 
 ---
 
 ## Efeitos
 
-| Voto | ID do Efeito      | O que acontece                                        |
-|------|-------------------|-------------------------------------------------------|
-| —    | `turbo`           | Acelera todos os veículos de NPCs próximos ao jogador |
-| —    | `explode_player`  | Explode o jogador                                     |
-| —    | `elevate_peds`    | Lança o jogador e pedestres próximos para o ar        |
-| —    | `wanted_up`       | Aumenta o nível de procurado em 1 (máx. 6)            |
-| —    | `wanted_clear`    | Zera o nível de procurado                             |
-| —    | `heal_player`     | Cura completa                                         |
-| —    | `ragdoll_peds`    | Faz pedestres próximos entrarem em ragdoll            |
-| —    | `explode_cars`    | Explode todos os carros de NPCs próximos              |
-| —    | `give_weapon`     | Dá uma arma aleatória (escopeta/M4/sniper/RPG)        |
+| ID | O que acontece |
+|---|---|
+| `SPAWN_TANKS` | Spawna um Rhino (tanque) perto do jogador |
+| `BLOW_ALL` | Explode todos os veículos de NPCs próximos |
+| `RANDOM_PED` | Spawna um ped hostil perto do jogador |
+| `WANTED_MAX` | Define procurado no máximo (6 estrelas) |
+| `FLIP_CARS` | Lança veículos próximos para o ar |
+| `EXPLODE_PLAYER` | Explode o jogador |
+| `ELEVATE_PEDS` | Lança o jogador e peds para o alto |
+| `WANTED_UP` | Aumenta procurado em 1 estrela |
+| `WANTED_CLEAR` | Zera o nível de procurado |
+| `HEAL_PLAYER` | Cura completa |
+| `RAGDOLL_PEDS` | Faz peds próximos entrarem em ragdoll |
+| `EXPLODE_CARS` | Explode carros de NPCs próximos |
+| `GIVE_WEAPON` | Dá uma arma aleatória (shotgun/M4/sniper/RPG) |
 
-A cada rodada, 3 efeitos aleatórios são sorteados e os espectadores votam. Após `VOTE_DURATION` segundos, o vencedor é enviado ao jogo.
+A cada rodada, os espectadores votam com `!vote EFEITO_ID`. Após o tempo de votação (padrão 30s), o efeito mais votado é ativado.
 
 ---
 
 ## Pré-requisitos
 
 | Componente | Versão | Observações |
-|------------|--------|-------------|
+|---|---|---|
 | GTA IV (PC) | qualquer | Steam / Rockstar Launcher (Complete Edition recomendado) |
-| [ScriptHook](https://gtaforums.com/topic/945746-iv-sdk-net/) | — | Necessário para carregar ASIs |
 | [IV-SDK .NET](https://github.com/ClonkAndre/IV-SDK-DotNet/releases) | ≥ 1.9.1 | Carregador de mods gerenciado |
-| Python | ≥ 3.9 | Para o bot |
-| Runtime .NET 4.5 | nativo | Já vem instalado no Windows |
-| **Apenas build no Linux** → Mono | ≥ 6.0 | `sudo apt install mono-complete` |
+| Go | ≥ 1.22 | Para compilar o servidor |
+| Runtime .NET 4.8 | nativo | Já vem instalado no Windows 10+ |
+| **Apenas build Linux** → Mono | ≥ 6.0 | `sudo apt install mono-complete` |
+| OBS Studio | qualquer | Opcional — para o overlay de stream |
 
 ---
 
 ## Download sem compilar (Windows)
 
-Se não quiser compilar o projeto, baixe a DLL mais recente diretamente na aba **[Releases](https://github.com/Gabryel-lima/LiveChaos-IV/releases/latest)** e siga a seção [Instalação Automática no Windows (PowerShell)](#instala%C3%A7%C3%A3o-autom%C3%A1tica-no-windows--powershell) abaixo.
+Baixe os artefatos pré-compilados na aba **[Releases](https://github.com/Gabryel-lima/LiveChaos-IV/releases/latest)**:
+- `LiveChaos.net.dll` + DLLs de referência — mod para GTA IV
+- `livechaos-server.exe` — servidor Go
+- `livechaos_overlay.lua` + `sources.json` — overlay OBS
 
 ---
 
@@ -65,110 +82,126 @@ git clone https://github.com/Gabryel-lima/LiveChaos-IV.git
 cd LiveChaos-IV
 ```
 
-### 2 — Compilar o mod do GTA IV
+### 2 — Compilar o mod C# (GTA IV)
 
 **Linux / macOS:**
 
 ```bash
-# Primeira vez: baixa o IV-SDK .NET e copia as DLLs de referência
-make setup
-
-# Compila o ChaosScript.dll em scripts/
-make build
+make setup      # baixa IV-SDK .NET e copia DLLs de referência
+make mod-build  # compila mod/LiveChaos.net.dll em scripts/
 ```
 
-**Windows (Visual Studio 2019+):**
+**Windows (Visual Studio 2022):**
 
-Abra `LiveChaos-IV.sln`, defina a configuração como **Release | x86** e compile.  
-A DLL será gerada em `scripts/`.
+Abra `LiveChaos-IV.sln`, defina **Release | x86** e compile. A DLL será gerada em `scripts/`.
 
-> **Requer Mono** no Linux: `sudo apt install mono-complete` ou `sudo dotnet-sdk install mono`. Alternativamente, compile no Windows com Visual Studio.
-
-### 3 — Configurar o bot
+### 3 — Compilar o servidor Go
 
 ```bash
-cp .env.example .env
-# Edite o .env com seu token OAuth do Twitch e/ou chave da API do YouTube
+make server-build  # gera bin/livechaos-server(.exe)
 ```
 
-### 4 — Instalar dependências Python
+Ou diretamente:
 
 ```bash
-make bot-setup
-# ou: pip install -r bot/requirements.txt
+cd server && go build -o ../bin/livechaos-server .
 ```
 
-### 5 — Instalar o mod no GTA IV
+### 4 — Configurar
 
-**Windows (automático):** execute o script PowerShell incluído no repositório:
+Edite `server/config.toml`:
+
+```toml
+[twitch]
+channel = "seu_canal"
+# oauth via variável de ambiente TWITCH_OAUTH
+
+[youtube]
+enabled = false
+# live_video_id = "xxxx"
+# api_key via variável de ambiente YOUTUBE_API_KEY
+
+[timer]
+vote_duration_s    = 30
+cooldown_duration_s = 5
+
+[effects]
+pool = ["SPAWN_TANKS", "BLOW_ALL", "RANDOM_PED", ...]
+```
+
+### 5 — Instalar no GTA IV
+
+**Windows (automático):**
 
 ```powershell
-# Habilite a política de execução uma vez (se ainda não fez):
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# Instale o mod (detecção automática do GTA IV):
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser  # uma vez
 .\Install-LiveChaos.ps1
 ```
 
-Consulte a seção **[Instalação Automática no Windows (PowerShell)](#instala%C3%A7%C3%A3o-autom%C3%A1tica-no-windows--powershell)** para mais detalhes, ou **[Guia de Instalação no GTA IV](#guia-de-instalação-no-gta-iv)** para instalação manual.
+O script detecta o GTA IV automaticamente, copia as DLLs, o servidor Go e o overlay OBS.
 
-> A pasta de configuração `IVSDKDotNet/` será criada automaticamente pelo IV-SDK .NET na primeira execução.
+**Manual:** copie `scripts/LiveChaos.net.dll`, `IVSDKDotNetWrapper.dll` e `Newtonsoft.Json.dll` para `<GTAIV>\scripts\`.
 
 ### 6 — Executar
 
-Inicie o bot Python **antes** de abrir o GTA IV:
-
 ```bash
-cd bot
-python chaos_bot.py
-```
+# 1. Inicie o servidor Go ANTES do GTA IV:
+TWITCH_OAUTH=oauth:xxx bin/livechaos-server
 
-Depois, abra o GTA IV. O mod se conecta a `127.0.0.1:9999` automaticamente.
+# 2. Abra o GTA IV — o mod conecta automaticamente via named pipe
+
+# 3. (Opcional) Ative o overlay no OBS:
+#    Ferramentas → Scripts → + → livechaos_overlay.lua
+```
 
 ---
 
-## Configuração
+## Overlay OBS
 
-Todas as configurações ficam no `.env` (copie de `.env.example`):
+O script Lua `obs/livechaos_overlay.lua` faz polling a `http://localhost:9001/state` e atualiza fontes de texto no OBS.
 
-```env
-# Twitch (https://twitchapps.com/tmi/ para o token OAuth)
-TWITCH_ENABLED=true
-TWITCH_TOKEN=oauth:xxxxxxxxxxxxxxxxxxxxxxxx
-TWITCH_CHANNEL=seu_canal
+### Fontes necessárias no OBS
 
-# YouTube (opcional — requer chave da YouTube Data API v3)
-YOUTUBE_ENABLED=false
-YOUTUBE_API_KEY=AIza...
-YOUTUBE_LIVE_ID=dQw4w9WgXcQ
+| Fonte | Tipo | Conteúdo |
+|---|---|---|
+| `LC_Effect` | Texto (GDI+) | Nome do efeito ativo |
+| `LC_Phase` | Texto (GDI+) | Fase atual (voting/active/cooldown) |
+| `LC_Votes` | Texto (GDI+) | Contagem de votos |
+| `LC_Timer_BG` | Fonte de cor | Fundo da barra de timer |
+| `LC_Timer_Fill` | Fonte de cor | Preenchimento da barra de timer |
 
-# Sistema de votação
-VOTE_DURATION=30        # segundos por rodada de votação
-VOTE_OPTIONS=3          # quantos efeitos são oferecidos por rodada
-```
+### Ativar
+
+1. Crie as fontes acima na sua cena OBS
+2. `Ferramentas → Scripts → +` → selecione `livechaos_overlay.lua`
+3. Configure o endereço do servidor se necessário (padrão: `http://localhost:9001/state`)
 
 ---
 
 ## Adicionando Novos Efeitos
 
-**1.** Adicione o ID do efeito em `ALL_EFFECTS` no `bot/chaos_bot.py`:
+**1.** Adicione o ID em `server/config.toml`:
 
-```python
-ALL_EFFECTS = [
-    ...
-    "meu_novo_efeito",
-]
+```toml
+[effects]
+pool = [..., "MEU_NOVO_EFEITO"]
 ```
 
-**2.** Adicione um `case` em `ChaosScript/ChaosScript.cs`:
+**2.** Adicione a constante em `mod/Effects.cs`:
 
 ```csharp
-case "meu_novo_efeito":
-    // chamada de native do IV-SDK .NET aqui
+public const string MeuNovoEfeito = "MEU_NOVO_EFEITO";
+```
+
+**3.** Adicione o `case` em `mod/EffectRunner.cs`:
+
+```csharp
+case Effects.MeuNovoEfeito:
+    // chamada de native do IV-SDK .NET
     break;
 ```
 
-**3.** Recompile com `make build` e copie o novo `LiveChaos.net.dll` para o GTA IV.
+**4.** Recompile: `make mod-build` e copie a DLL para `<GTAIV>\scripts\`.
 
 ---
 
@@ -176,78 +209,85 @@ case "meu_novo_efeito":
 
 ```
 LiveChaos-IV/
-├── .github/
-│   └── workflows/
-│       └── release.yml       ← CI/CD: compila no Windows e publica GitHub Release em tags v*.*.*
-├── ChaosScript/
-│   ├── ChaosScript.cs        ← mod do GTA IV (C#, IV-SDK .NET)
+├── .github/workflows/
+│   └── release.yml            ← CI: compila C# + Go, publica GitHub Release em tags v*.*.*
+├── server/                    ← Servidor Go (Twitch IRC + YouTube + votação + IPC + WebSocket)
+│   ├── main.go                   ponto de entrada, config, wiring
+│   ├── config.toml               configuração (canais, timer, efeitos)
+│   ├── bot/
+│   │   ├── twitch.go             cliente Twitch IRC
+│   │   └── youtube.go            polling YouTube Live Chat
+│   ├── vote/
+│   │   └── aggregator.go         contagem de votos, ciclo de timer
+│   ├── ipc/
+│   │   ├── pipe.go               servidor named pipe (JSON)
+│   │   ├── listener_windows.go   listener Windows (go-winio)
+│   │   └── listener_other.go     stub Linux/macOS
+│   ├── overlay/
+│   │   └── ws.go                 WebSocket + HTTP /state
+│   └── state/
+│       └── state.go              State struct + Bus broadcaster
+├── mod/                       ← Mod C# do GTA IV (IV-SDK .NET)
+│   ├── LiveChaos.cs              ponto de entrada (Script)
+│   ├── PipeClient.cs             cliente named pipe (background thread)
+│   ├── HUD.cs                    overlay in-game (timer, efeito, votos)
+│   ├── EffectRunner.cs           execução dos 13 efeitos
+│   ├── Effects.cs                constantes de IDs
+│   └── LiveChaos.csproj
+├── obs/                       ← Overlay OBS (Lua)
+│   ├── livechaos_overlay.lua     polling HTTP + atualização de fontes
+│   └── sources.json              nomes das fontes OBS
+├── ChaosScript/               ← Mod legado (monolítico, mantido para referência)
+│   ├── ChaosScript.cs
 │   └── ChaosScript.csproj
-├── bot/
-│   ├── chaos_bot.py          ← servidor TCP Python + bot Twitch/YouTube
-│   └── requirements.txt
+├── bot/                       ← Bot Python (DEPRECADO — substituído pelo servidor Go)
+│   └── chaos_bot.py
 ├── tests/
-│   └── Test-Install-LiveChaos.ps1  ← testes do script de instalação (14/14 ✅)
-├── .env.example              ← modelo de configuração
-├── Install-LiveChaos.ps1     ← instalador automático para Windows (PowerShell)
-├── Makefile                  ← sistema de build (Linux/macOS + CLI Windows)
-├── LiveChaos-IV.sln          ← solução Visual Studio (Windows)
+│   └── Test-Install-LiveChaos.ps1
+├── Install-LiveChaos.ps1      ← Instalador automático (mod + servidor + OBS overlay)
+├── Makefile                   ← Build system (setup, build, mod-build, server-build, clean)
+├── LiveChaos-IV.sln
 └── README.md
 ```
-
-> `scripts/` contém as DLLs pré-compiladas e é **rastreado pelo git** para facilitar a instalação. `libs/` é gerado por `make setup` e está no gitignore.
 
 ---
 
 ## Referência de Build
 
 ```bash
-make setup      # Baixa o IV-SDK .NET v1.9.1, extrai as DLLs de referência
-make build      # Compila o ChaosScript.dll (inclui setup)
-make bot-setup  # pip install -r bot/requirements.txt
-make clean      # Remove arquivos compilados
-make distclean  # Remove arquivos compilados + libs baixadas
-```
-
-Sobrescrever a versão do IV-SDK:
-
-```bash
-make setup IVSDK_VER=1.9.2
+make setup          # Baixa IV-SDK .NET v1.9.1, extrai DLLs de referência
+make build          # Compila ChaosScript.dll (legado)
+make mod-build      # Compila mod/LiveChaos.net.dll (novo)
+make server-build   # Compila bin/livechaos-server
+make server-run     # Executa o servidor Go em modo dev
+make clean          # Remove arquivos compilados
+make distclean      # Remove compilados + libs baixadas
 ```
 
 ---
 
 ## Instalação Automática no Windows — PowerShell
 
-O script `Install-LiveChaos.ps1` detecta a instalação do GTA IV (Steam ou Rockstar Launcher) e copia as DLLs automaticamente.
-
-### Pré-requisito: habilitar a política de execução
-
-Por padrão, o Windows bloqueia scripts PowerShell não assinados. Execute **uma única vez** em um terminal PowerShell:
+O script `Install-LiveChaos.ps1` detecta a instalação do GTA IV (Steam ou Rockstar Launcher), copia as DLLs, o servidor Go e opcionalmente instala o overlay no OBS.
 
 ```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-> `RemoteSigned` permite rodar scripts locais sem assinatura digital, mas exige assinatura para scripts baixados da internet. Essa é a configuração recomendada para uso geral.
-
-### Executar o instalador
-
-```powershell
-# Na raiz do repositório:
+# Detecção automática completa:
 .\Install-LiveChaos.ps1
-```
 
-O script irá:
-1. Pesquisar o GTA IV no registro do Steam e do Rockstar Launcher
-2. Tentar caminhos padrão como fallback
-3. Pedir o caminho manualmente se não encontrar
-4. Criar `GTAIV\scripts\` se não existir
-5. Copiar `LiveChaos.net.dll`, `IVSDKDotNetWrapper.dll` e `Newtonsoft.Json.dll`
-
-```powershell
-# Ou com caminho manual:
+# Caminho manual do GTA IV:
 .\Install-LiveChaos.ps1 -GamePath "D:\Games\GTAIV"
+
+# Com OBS manual:
+.\Install-LiveChaos.ps1 -OBSScriptsPath "C:\Users\eu\AppData\Roaming\obs-studio"
+
+# Pular instalação OBS:
+.\Install-LiveChaos.ps1 -OBSScriptsPath "none"
 ```
+
+O script copia:
+1. `LiveChaos.net.dll`, `IVSDKDotNetWrapper.dll`, `Newtonsoft.Json.dll` → `<GTAIV>\scripts\`
+2. `livechaos-server.exe` + `config.toml` → `<GTAIV>\`
+3. `livechaos_overlay.lua` + `sources.json` → `<OBS>\` (se detectado)
 
 ---
 

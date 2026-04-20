@@ -1,24 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
+          Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{C1A05S1V-L1VE-CH40-S1V4-000000000001}</ProjectGuid>
+    <ProjectGuid>{C1A05S1V-L1VE-CH40-5C4-000000000002}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>LiveChaos</RootNamespace>
     <AssemblyName>LiveChaos.net</AssemblyName>
     <!--
-      IV-SDK .NET requer .NET Framework 4.8 (4.5+ compatível em runtime).
-      O runner do GitHub Actions (windows-latest) inclui o targeting pack 4.8.
+      IV-SDK .NET requires .NET Framework 4.8 (4.5+ compatible at runtime).
+      The GitHub Actions runner (windows-latest) includes the 4.8 targeting pack.
     -->
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
-  <!-- ── Debug AnyCPU ─────────────────────────────────────────── -->
+  <!-- ── Debug AnyCPU ──────────────────────────────────────────────────────── -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
@@ -29,9 +30,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
 
-  <!-- ── Release x86 → ../scripts/ (relativo — padrão portátil) ─────────── -->
-  <!-- Usuários Windows: sobrescreva OutputPath nas propriedades do VS ou passe -->
-  <!--   /p:OutputPath="C:\...\GTAIV\scripts\" ao msbuild para deploy direto.  -->
+  <!-- ── Release x86 → ../scripts/ ───────────────────────────────────────── -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
     <OutputPath>..\scripts\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
@@ -43,12 +42,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      IVSDKDotNetWrapper.dll — API IV-SDK .NET v1.9.1
-      O loader IVSDKDotNet.asi deve estar na raiz do GTA IV.
-    -->
+    <!-- IV-SDK .NET v1.9.1 wrapper — must be in scripts/ (set up by make setup) -->
     <Reference Include="IVSDKDotNetWrapper">
       <HintPath>..\scripts\IVSDKDotNetWrapper.dll</HintPath>
+    </Reference>
+    <!-- Newtonsoft.Json for JSON deserialization of pipe messages -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\scripts\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Numerics">
@@ -67,7 +67,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="ChaosScript.cs" />
+    <Compile Include="Effects.cs" />
+    <Compile Include="PipeClient.cs" />
+    <Compile Include="HUD.cs" />
+    <Compile Include="EffectRunner.cs" />
+    <Compile Include="LiveChaos.cs" />
   </ItemGroup>
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

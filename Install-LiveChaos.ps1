@@ -1,11 +1,14 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Instala o mod LiveChaos-IV na pasta correta do GTA IV.
+    Instala o mod LiveChaos-IV na pasta correta do GTA IV e,
+    opcionalmente, copia o overlay Lua para o OBS Studio.
 
 .DESCRIPTION
-    Detecta automaticamente a instalação do GTA IV (Steam ou Rockstar Launcher),
-    cria a pasta scripts/ se necessário e copia as DLLs do mod.
+    1. Detecta automaticamente a instalação do GTA IV (Steam ou Rockstar Launcher),
+       cria a pasta scripts/ se necessário e copia as DLLs do mod.
+    2. Se -OBSScriptsPath for fornecido (ou detectado), copia
+       livechaos_overlay.lua e sources.json para o OBS.
 
 .PARAMETER GamePath
     Caminho manual para a pasta raiz do GTA IV (que contém GTAIV.exe).
@@ -15,13 +18,26 @@
     Pasta de onde as DLLs serão copiadas.
     Padrão: .\scripts\ (relativo ao diretório do script).
 
+.PARAMETER OBSScriptsPath
+    Caminho da pasta de scripts Lua do OBS Studio.
+    Se omitido, tenta detectar automaticamente em %APPDATA%\obs-studio\scripts.
+    Passe "none" para pular a instalação do overlay OBS.
+
+.PARAMETER ServerBinPath
+    Pasta de onde o binário do servidor Go será copiado.
+    Padrão: .\bin\ (relativo ao diretório do script).
+
 .EXAMPLE
-    # Detecção automática
+    # Detecção automática completa
     .\Install-LiveChaos.ps1
 
 .EXAMPLE
     # Caminho manual
     .\Install-LiveChaos.ps1 -GamePath "D:\Games\GTAIV"
+
+.EXAMPLE
+    # Com OBS manual
+    .\Install-LiveChaos.ps1 -OBSScriptsPath "C:\Users\eu\AppData\Roaming\obs-studio\scripts"
 
 .NOTES
     POLITICA DE EXECUCAO — antes de rodar, execute uma vez no PowerShell como Administrador:
@@ -32,7 +48,9 @@
 [CmdletBinding()]
 param(
     [string]$GamePath,
-    [string]$SourcePath = (Join-Path $PSScriptRoot 'scripts')
+    [string]$SourcePath = (Join-Path $PSScriptRoot 'scripts'),
+    [string]$OBSScriptsPath,
+    [string]$ServerBinPath = (Join-Path $PSScriptRoot 'bin')
 )
 
 Set-StrictMode -Version Latest
@@ -156,20 +174,100 @@ foreach ($dll in $RequiredDLLs) {
     }
 }
 
-# ── Resumo ────────────────────────────────────────────────────────────────────
+# ── Resumo do mod ─────────────────────────────────────────────────────────────
 
 Write-Host ''
 if ($missing -eq 0) {
-    Write-Host "==> Instalacao concluida! $copied DLL(s) copiada(s) para:" -ForegroundColor Green
+    Write-Host "==> Mod instalado! $copied DLL(s) copiada(s) para:" -ForegroundColor Green
     Write-Host "    $destination" -ForegroundColor Green
-    Write-Host ''
-    Write-Host 'Proximo passo: inicie o bot Python ANTES de abrir o GTA IV:'
-    Write-Host '    python bot\chaos_bot.py'
 } else {
-    Write-Host "==> Parcialmente concluido: $copied copiada(s), $missing ausente(s)." -ForegroundColor Yellow
+    Write-Host "==> Mod parcialmente instalado: $copied copiada(s), $missing ausente(s)." -ForegroundColor Yellow
     Write-Host ''
     Write-Host 'Para gerar as DLLs ausentes, compile o projeto:'
     Write-Host '    No Visual Studio: Release | x86 -> Build Solution'
     Write-Host '    Ou baixe a versao pre-compilada em:'
     Write-Host '    https://github.com/Gabryel-lima/LiveChaos-IV/releases/latest'
 }
+
+# ── Copiar servidor Go (se existir) ──────────────────────────────────────────
+
+$serverExe = Join-Path $ServerBinPath 'livechaos-server.exe'
+if (Test-Path $serverExe) {
+    $serverDest = Join-Path $GamePath 'livechaos-server.exe'
+    Copy-Item -Path $serverExe -Destination $serverDest -Force
+    Write-Host "  [OK]      livechaos-server.exe -> $GamePath" -ForegroundColor Green
+
+    # Copiar config.toml junto se existir
+    $configSrc = Join-Path $PSScriptRoot 'server\config.toml'
+    if (Test-Path $configSrc) {
+        $configDest = Join-Path $GamePath 'config.toml'
+        if (-not (Test-Path $configDest)) {
+            Copy-Item -Path $configSrc -Destination $configDest
+            Write-Host "  [OK]      config.toml copiado (edite com seus tokens)" -ForegroundColor Green
+        } else {
+            Write-Host "  [SKIP]    config.toml ja existe em $GamePath (nao sobrescrito)" -ForegroundColor Cyan
+        }
+    }
+} else {
+    Write-Host ''
+    Write-Host '  [INFO]    livechaos-server.exe nao encontrado em bin\.' -ForegroundColor Cyan
+    Write-Host '            Compile com: cd server && go build -o ..\bin\livechaos-server.exe .' -ForegroundColor Cyan
+    Write-Host '            Ou baixe em: https://github.com/Gabryel-lima/LiveChaos-IV/releases/latest' -ForegroundColor Cyan
+}
+
+# ── Instalar overlay OBS (Lua) ────────────────────────────────────────────────
+
+$obsSourceDir = Join-Path $PSScriptRoot 'obs'
+
+if ($OBSScriptsPath -eq 'none') {
+    Write-Host ''
+    Write-Host '  [SKIP]    Overlay OBS pulado (-OBSScriptsPath "none")' -ForegroundColor Cyan
+} else {
+    # Auto-detectar pasta de scripts do OBS
+    if (-not $OBSScriptsPath) {
+        $obsDefault = Join-Path $env:APPDATA 'obs-studio'
+        if (Test-Path $obsDefault) {
+            $OBSScriptsPath = $obsDefault
+        }
+    }
+
+    if ($OBSScriptsPath -and (Test-Path $OBSScriptsPath)) {
+        Write-Host ''
+        Write-Host '==> Instalando overlay OBS...' -ForegroundColor Cyan
+
+        $obsFiles = @('livechaos_overlay.lua', 'sources.json')
+        foreach ($f in $obsFiles) {
+            $src = Join-Path $obsSourceDir $f
+            if (Test-Path $src) {
+                Copy-Item -Path $src -Destination $OBSScriptsPath -Force
+                Write-Host "  [OK]      $f -> $OBSScriptsPath" -ForegroundColor Green
+            } else {
+                Write-Host "  [AUSENTE] $f nao encontrado em obs\" -ForegroundColor Yellow
+            }
+        }
+
+        Write-Host ''
+        Write-Host '  Para ativar no OBS:' -ForegroundColor Cyan
+        Write-Host '    1. Abra OBS -> Ferramentas -> Scripts' -ForegroundColor Cyan
+        Write-Host '    2. Clique "+" e selecione livechaos_overlay.lua' -ForegroundColor Cyan
+        Write-Host '    3. Crie as fontes de texto: LC_Effect, LC_Phase, LC_Votes' -ForegroundColor Cyan
+        Write-Host '    4. Crie barra de timer: LC_Timer_BG (fundo) + LC_Timer_Fill (preenchimento)' -ForegroundColor Cyan
+    } else {
+        Write-Host ''
+        Write-Host '  [INFO]    OBS Studio nao detectado automaticamente.' -ForegroundColor Cyan
+        Write-Host '            Para instalar o overlay, re-execute com:' -ForegroundColor Cyan
+        Write-Host '            .\Install-LiveChaos.ps1 -OBSScriptsPath "C:\...\obs-studio"' -ForegroundColor Cyan
+    }
+}
+
+# ── Instrucoes finais ─────────────────────────────────────────────────────────
+
+Write-Host ''
+Write-Host '════════════════════════════════════════════════════════════' -ForegroundColor Cyan
+Write-Host '  Proximos passos:' -ForegroundColor Cyan
+Write-Host '    1. Configure server\config.toml com seu canal Twitch/YouTube' -ForegroundColor Cyan
+Write-Host '    2. Inicie o servidor Go ANTES de abrir o GTA IV:' -ForegroundColor Cyan
+Write-Host '       set TWITCH_OAUTH=oauth:xxx && livechaos-server.exe' -ForegroundColor Cyan
+Write-Host '    3. Abra o GTA IV — o mod conecta automaticamente ao servidor' -ForegroundColor Cyan
+Write-Host '    4. (Opcional) Ative o overlay Lua no OBS' -ForegroundColor Cyan
+Write-Host '════════════════════════════════════════════════════════════' -ForegroundColor Cyan

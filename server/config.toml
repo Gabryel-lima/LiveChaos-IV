@@ -1,0 +1,24 @@
+[twitch]
+channel      = "your_channel"
+# oauth_token is loaded from the TWITCH_OAUTH environment variable — never hardcode here.
+oauth_token  = ""
+
+[youtube]
+enabled       = false
+# live_video_id: the YouTube video ID of your live stream (e.g. "dQw4w9WgXcQ")
+live_video_id = ""
+# api_key is loaded from the YOUTUBE_API_KEY environment variable — never hardcode here.
+api_key       = ""
+
+[timer]
+vote_duration_s     = 30
+cooldown_duration_s = 5
+
+[effects]
+pool = ["SPAWN_TANKS", "BLOW_ALL", "RANDOM_PED", "WANTED_MAX", "FLIP_CARS",
+        "EXPLODE_PLAYER", "ELEVATE_PEDS", "WANTED_UP", "WANTED_CLEAR",
+        "HEAL_PLAYER", "RAGDOLL_PEDS", "EXPLODE_CARS", "GIVE_WEAPON"]
+
+[server]
+ws_port   = 9001
+pipe_name = "\\\\.\\pipe\\LiveChaosIV"

@@ -27,7 +27,14 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      # ── 3. Baixar IV-SDK .NET e copiar DLLs de referência ────────────────────
+      # ── 3. Setup Go ─────────────────────────────────────────────────────────
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: server/go.sum
+
+      # ── 4. Baixar IV-SDK .NET e copiar DLLs de referência ────────────────────
       - name: Setup IV-SDK .NET
         shell: pwsh
         env:
@@ -50,7 +57,7 @@ jobs:
           Copy-Item libs/IV-SDK-DotNet/IVSDKDotNet/bin/Newtonsoft.Json.dll scripts/
           Write-Host "==> DLLs de referência prontas."
 
-      # ── 4. Compilar ──────────────────────────────────────────────────────────
+      # ── 5. Compilar ChaosScript (legado) ─────────────────────────────────────
       - name: Build ChaosScript.dll
         shell: cmd
         run: |
@@ -61,8 +68,26 @@ jobs:
             /p:OutputPath=..\scripts\ ^
             /verbosity:minimal
 
-      # ── 5. Publicar artefato de CI (em todo push/PR) ─────────────────────────
-      - name: Upload artifact
+      # ── 6. Compilar mod/ (novo — PipeClient + HUD + EffectRunner) ───────────
+      - name: Build mod/LiveChaos.net.dll
+        shell: cmd
+        run: |
+          cd mod
+          msbuild LiveChaos.csproj ^
+            /p:Configuration=Release ^
+            /p:Platform=x86 ^
+            /p:OutputPath=..\scripts\ ^
+            /verbosity:minimal
+
+      # ── 7. Compilar servidor Go ──────────────────────────────────────────────
+      - name: Build Go server
+        shell: pwsh
+        run: |
+          cd server
+          go build -o ..\bin\livechaos-server.exe .
+
+      # ── 8. Publicar artefatos de CI (em todo push/PR) ───────────────────────
+      - name: Upload C# mod artifact
         uses: actions/upload-artifact@v4
         with:
           name: LiveChaos-net-dll
@@ -72,7 +97,23 @@ jobs:
             scripts/Newtonsoft.Json.dll
           if-no-files-found: error
 
-      # ── 6. Criar GitHub Release (apenas em tags vX.Y.Z) ─────────────────────
+      - name: Upload Go server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: livechaos-server
+          path: bin/livechaos-server.exe
+          if-no-files-found: error
+
+      - name: Upload OBS overlay artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-overlay
+          path: |
+            obs/livechaos_overlay.lua
+            obs/sources.json
+          if-no-files-found: error
+
+      # ── 9. Criar GitHub Release (apenas em tags vX.Y.Z) ─────────────────────
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -82,3 +123,7 @@ jobs:
             scripts/LiveChaos.net.dll
             scripts/IVSDKDotNetWrapper.dll
             scripts/Newtonsoft.Json.dll
+            bin/livechaos-server.exe
+            obs/livechaos_overlay.lua
+            obs/sources.json
+            server/config.toml

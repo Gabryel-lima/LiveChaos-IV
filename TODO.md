@@ -5,44 +5,46 @@ Marque com `[x]` quando concluído.
 
 ---
 
+## Concluídos
+
+- [x] **`mono-complete` não instalado** — Makefile auto-detecta `msbuild`, `xbuild` e `dotnet msbuild`.
+- [x] **`twitchio` v3 quebrou a API** — Bot Python aposentado; servidor Go usa `go-twitch-irc/v4` diretamente.
+- [x] **`_pending` guarda apenas 1 efeito** — `PipeClient.cs` agora usa `Queue<string>`.
+- [x] **CI release.yml .NET 4.5 targeting pack** — Retargetado para .NET 4.8 (disponível no runner windows-latest).
+- [x] **Bot Python aposentado** — Substituído pelo servidor Go (`server/`). Twitch IRC e YouTube Live Chat agora em Go.
+- [x] **Arquitetura 3 componentes** — Servidor Go + Mod C# + Overlay OBS Lua implementados.
+- [x] **CI/CD release.yml** — Compila C# (ChaosScript + mod), Go server, e publica artefatos + GitHub Release.
+- [x] **Overlay OBS** — Script Lua que faz polling HTTP e atualiza fontes de texto/timer no OBS.
+- [x] **Named pipe IPC** — Comunicação tipada JSON entre servidor Go e mod C# via named pipe.
+- [x] **HUD in-game** — Barra de timer com color lerp, nome do efeito e votos desenhados via natives.
+- [x] **Install-LiveChaos.ps1 atualizado** — Agora copia mod DLLs + servidor Go + overlay OBS.
+
+---
+
 ## 🔴 Bugs / Bloqueantes
 
-- [x] **`mono-complete` não instalado** — `make build` falha no Linux sem Mono. ✅ **Resolvido.**
-  - Makefile agora auto-detecta `msbuild`, `xbuild` e `dotnet msbuild`.
-  - Solução para o usuário: `sudo apt install mono-complete` (Ubuntu/Debian) ou `sudo pacman -S mono` (Arch).
-
-- [ ] **`twitchio` v3 quebrou a API** — A versão 3.x do twitchio alterou a interface de `Bot`.
-  - O `chaos_bot.py` usa a API do twitchio v2 (`twitchio_commands.Bot`, `event_message`).
-  - `bot/requirements.txt` já tem `twitchio>=2.6.0` mas **falta o limite superior `<3.0`**.
-  - Solução pendente: adicionar `twitchio>=2.6.0,<3.0` no `requirements.txt` **ou** migrar para a API v3.
-
-- [ ] **`_pending` guarda apenas 1 efeito** — Se dois efeitos chegarem no mesmo tick o segundo sobrescreve o primeiro.
-  - Solução: trocar `_pending: string` por uma `Queue<string>` e despachar um por tick.
+- [ ] **Testar em GTA IV real** — Todos os efeitos compilam, mas precisam de validação in-game.
+  - Verificar se os model hashes (`RHINO = 0x6D6F1DC8`, `PED_MODEL = 0xF6C4AA6`) funcionam corretamente.
+  - Testar `APPLY_FORCE_TO_CAR` no `FLIP_CARS` (substituiu `SET_CAR_QUATERNION` que não existe).
 
 ---
 
 ## 🟡 Compilação Windows
 
 ### Status atual
-O `.csproj` já está configurado para compilar com MSBuild nativo no Windows:
-- Target: `.NET Framework 4.5` (compatível com GTA IV / IV-SDK .NET)
-- Platform: `x86` (Release) — necessário para o ScriptHookDotNet
-- OutputPath Release: `..\scripts\` — saída direta na pasta correta
+- `.csproj` retargetados para `.NET Framework 4.8` (compatível com IV-SDK .NET, disponível no runner CI).
+- Platform: `x86` (Release) — necessário para IV-SDK .NET.
+- CI compila ambos `ChaosScript/` (legado) e `mod/` (novo) + servidor Go.
 
 ### Passos para compilar no Windows
-1. Instale **Visual Studio 2022** (Community gratuito) com workload `.NET desktop development` **ou**
-   instale apenas o [Build Tools for Visual Studio](https://aka.ms/vs/17/release/vs_BuildTools.exe).
-2. Abra o **Developer Command Prompt** e rode:
+1. Instale **Visual Studio 2022** (Community) com workload `.NET desktop development` **ou** [Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe).
+2. Abra o **Developer Command Prompt**:
    ```bat
-   cd ChaosScript
-   msbuild ChaosScript.csproj /p:Configuration=Release /p:Platform=x86
+   cd mod
+   msbuild LiveChaos.csproj /p:Configuration=Release /p:Platform=x86
    ```
-3. O arquivo `scripts\LiveChaos.net.dll` será gerado automaticamente.
-4. Copie `scripts\LiveChaos.net.dll` para `<GTAIV>\scripts\`.
-
-### Automação (CI/CD GitHub Actions)
-- [x] Adicionar workflow `.github/workflows/release.yml` que compila no Windows runner e faz upload do artifact `LiveChaos.net.dll`. ✅ **Resolvido.**
-  - CI em push para `main` e PRs; GitHub Release com DLLs em tags `v*.*.*`.
+3. `scripts\LiveChaos.net.dll` será gerado.
+4. Copie para `<GTAIV>\scripts\`.
 
 ---
 
@@ -50,54 +52,21 @@ O `.csproj` já está configurado para compilar com MSBuild nativo no Windows:
 
 > Prioridade alta — permite ao streamer ativar/desativar efeitos e configurar o mod sem sair do jogo.
 
-### Design proposto
-Menu ativado pela tecla `F8` (configurável). Navegação com `↑ ↓` e confirmação com `Enter`. Tecla `Backspace` / `F8` fecha.
+- [ ] **Classe `ChaosMenu`** — desenhar e navegar menu com `DRAW_RECT` + texto nativo.
+- [ ] **Tecla de atalho F8** — capturar `KeyDown` para abrir/fechar.
+- [ ] **Navegação** — toggles, ajuste de inteiros com `←/→`.
+- [ ] **Arquivo de config** (`scripts/LiveChaos.ini`) — persistir preferências.
 
-```
-┌─────────────────────────────┐
-│      LiveChaos-IV  v1.0     │
-├─────────────────────────────┤
-│  [ON]  Mod ativo            │
-│  [ON]  Turbo NPC            │
-│  [30s] Duração da votação   │
-│  [3]   Opções por rodada    │
-├─────────────────────────────┤
-│  Efeitos habilitados:       │
-│   ✔ turbo                   │
-│   ✔ explode_player          │
-│   ✔ elevate_peds            │
-│   ✔ wanted_up               │
-│   ✔ wanted_clear            │
-│   ✔ heal_player             │
-│   ✔ ragdoll_peds            │
-│   ✔ explode_cars            │
-│   ✔ give_weapon             │
-├─────────────────────────────┤
-│  [Testar efeito aleatório]  │
-│  [Salvar configuração]      │
-└─────────────────────────────┘
-```
+---
 
-### Implementação (ChaosScript.cs)
+## 🟢 Melhorias Futuras
 
-- [ ] **Classe `ChaosMenu`** — responsável por desenhar e navegar no menu.
-  - Usar `DRAW_RECT` + `PRINT_STRING_WITH_LITERAL_STRING_NOW` da API nativa para desenhar fundo e texto.
-  - Alternativamente, usar `IVGame.ShowSubtitleMessage` para feedback rápido.
-- [ ] **Tecla de atalho** — capturar `KeyDown` (evento do SDK) para abrir/fechar o menu.
-- [ ] **Navegação** — estado de item selecionado, toggle de booleanos, ajuste de inteiros com `←/→`.
-- [ ] **Arquivo de config** (`scripts/LiveChaos.ini`) — persistir preferências entre sessões.
-  - Usar `System.IO.File` + `System.Configuration` ou parser INI manual simples.
-
-### Itens do menu
-
-| Item | Tipo | Valor padrão | Descrição |
-|------|------|--------------|-----------|
-| Mod ativo | Toggle | `true` | Liga/desliga recepção de efeitos |
-| Turbo NPC | Toggle | `true` | Aplica turbo contínuo aos NPCs |
-| Duração votação | Int (s) | `30` | Enviado ao bot via socket |
-| Opções por rodada | Int | `3` | Sorteio de efeitos |
-| Lista de efeitos | Checklist | todos ON | Quais efeitos entram no sorteio |
-| Testar efeito | Ação | — | Dispara efeito aleatório imediatamente |
+- [ ] **Mais efeitos** — Ampliar o pool (weather change, teleport, spawn helicopters, etc.).
+- [ ] **Pipe bidirecional** — Mod envia estado de volta para o servidor (saúde, posição, etc.).
+- [ ] **Dashboard web** — Interface web para gerenciar efeitos em tempo real via WebSocket.
+- [ ] **go.sum no repositório** — Executar `go mod tidy` e commitar `go.sum` para builds reproduzíveis.
+- [ ] **Testes unitários Go** — Cobrir `vote/aggregator.go` e `state/state.go`.
+- [ ] **Remover ChaosScript/ legado** — Após validação in-game do novo `mod/`, remover código antigo.
 | Salvar config | Ação | — | Escreve `LiveChaos.ini` |
 
 ---

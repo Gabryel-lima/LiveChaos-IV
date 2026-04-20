@@ -43,9 +43,23 @@ IVSDK_DIR   = libs/IV-SDK-DotNet
 REF_DLL     = scripts/IVSDKDotNetWrapper.dll
 OUTPUT_DLL  = scripts/LiveChaos.net.dll
 
-.PHONY: all setup build clean distclean bot-setup install-deps check-tools-dl check-tools-build
+.PHONY: all help setup build clean distclean bot-setup install-deps check-tools-dl check-tools-build
 
 all: setup build
+
+# ─── Ajuda ───────────────────────────────────────────────────────────────────
+help:
+	@echo ""
+	@echo "LiveChaos-IV — Makefile de Build"
+	@echo ""
+	@echo "Uso:"
+	@echo "  make install-deps    Mostra o comando para instalar as dependências"
+	@echo "  make setup           Baixa o IV-SDK .NET e copia as DLLs de referência"
+	@echo "  make build           Compila o ChaosScript.dll (executa setup se necessário)"
+	@echo "  make bot-setup       Instala as dependências do bot Python"
+	@echo "  make clean           Remove os arquivos compilados"
+	@echo "  make distclean       Remove os arquivos compilados + libs baixadas"
+	@echo ""
 
 # ─── Instalar dependências ────────────────────────────────────────────────────
 install-deps:
@@ -130,6 +144,7 @@ bot-setup:
 clean:
 	@echo "==> Removendo arquivos compilados..."
 	rm -rf ChaosScript/bin ChaosScript/obj
+	rm -rf mod/bin mod/obj
 	rm -f  scripts/*.dll scripts/*.pdb
 	@echo "==> Pronto."
 
@@ -138,3 +153,42 @@ distclean: clean
 	chmod -Rf u+w libs/ 2>/dev/null || true
 	rm -rf libs/
 	@echo "==> Pronto."
+
+# ─── Mod novo (mod/) ─────────────────────────────────────────────────────────
+# Compila o mod refatorado (com PipeClient + HUD + EffectRunner) em scripts/
+mod-build: check-tools-build $(REF_DLL)
+	@echo "==> Compilando mod/LiveChaos.net.dll (Release|x86)..."
+	cd mod && $(MSBUILD) LiveChaos.csproj \
+		/p:Configuration=Release \
+		/p:Platform=x86 \
+		/p:OutputPath=../scripts/ \
+		/verbosity:minimal
+	@echo ""
+	@echo "  mod-build concluído: $(OUTPUT_DLL)"
+	@echo ""
+
+# ─── Go Server ───────────────────────────────────────────────────────────────
+GO ?= go
+
+# Baixa dependências do módulo Go (requer internet na primeira vez)
+server-deps:
+	@echo "==> Baixando dependências Go do servidor..."
+	cd server && $(GO) mod download
+	@echo "==> Dependências prontas. Execute 'make server-build'."
+
+# Compila o binário do servidor Go em bin/livechaos-server
+server-build: server-deps
+	@echo "==> Compilando servidor Go..."
+	@mkdir -p bin
+	cd server && $(GO) build -o ../bin/livechaos-server .
+	@echo ""
+	@echo "  Binário: bin/livechaos-server"
+	@echo "  Para rodar: TWITCH_OAUTH=oauth:xxx bin/livechaos-server"
+	@echo ""
+
+# Executa o servidor Go sem compilar (útil em desenvolvimento)
+server-run:
+	@echo "==> Iniciando servidor Go (modo dev)..."
+	cd server && TWITCH_OAUTH=$${TWITCH_OAUTH:-oauth:placeholder} $(GO) run .
+
+.PHONY: mod-build server-deps server-build server-run

@@ -1,0 +1,10 @@
+{
+  "sources": {
+    "effect":     "LC_Effect",
+    "timer_bg":   "LC_Timer_BG",
+    "timer_fill": "LC_Timer_Fill",
+    "votes":      "LC_Votes",
+    "phase":      "LC_Phase"
+  },
+  "timer_max_px": 400
+}
