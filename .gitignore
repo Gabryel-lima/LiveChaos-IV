@@ -21,9 +21,9 @@ env/
 libs/
 #*.zip
 
-# ─── Game binary files — NOT redistributable, install manually (see README) ──
-Main_GTAIV_Folder/
-*.asi
+# ─── ASI binaries — ignorar globalmente, exceto os do próprio projeto ─────────
+#*.asi
+#!Main_GTAIV_Folder/*.asi   # loader customizado (MyLoader) + hooks necessários
 
 # ─── Logs ────────────────────────────────────────────────────────────────────
 *.log

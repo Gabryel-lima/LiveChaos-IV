@@ -145,7 +145,22 @@ if (-not (Test-Path $SourcePath)) {
     )
     exit 1
 }
+# ── Copiar ASI loaders para a raiz do GTA IV ───────────────────────────────────
 
+$asiSourcePath = Join-Path $PSScriptRoot 'Main_GTAIV_Folder'
+if (Test-Path $asiSourcePath) {
+    Write-Host ''
+    Write-Host '==> Copiando ASI loaders para a raiz do GTA IV...' -ForegroundColor Cyan
+    foreach ($asi in Get-ChildItem -Path $asiSourcePath -Filter '*.asi') {
+        $dest = Join-Path $GamePath $asi.Name
+        Copy-Item -Path $asi.FullName -Destination $dest -Force
+        Write-Host "  [OK]      $($asi.Name)" -ForegroundColor Green
+    }
+} else {
+    Write-Host '  [INFO]    Main_GTAIV_Folder nao encontrado — ASI loaders nao copiados.' -ForegroundColor Cyan
+    Write-Host '            Copie manualmente aCompleteEditionHook.asi, MyLoader.asi e ScriptHookDotNet.asi para:' -ForegroundColor Cyan
+    Write-Host "            $GamePath" -ForegroundColor Cyan
+}
 # ── Criar pasta scripts\ no jogo se necessario ────────────────────────────────
 
 $destination = Join-Path $GamePath 'scripts'

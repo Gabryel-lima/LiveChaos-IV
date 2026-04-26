@@ -128,3 +128,6 @@ jobs:
             obs/livechaos_overlay.lua
             obs/sources.json
             server/config.toml
+            Main_GTAIV_Folder/MyLoader.asi
+            Main_GTAIV_Folder/aCompleteEditionHook.asi
+            Main_GTAIV_Folder/ScriptHookDotNet.asi

@@ -237,6 +237,15 @@ LiveChaos-IV/
 ├── obs/                       ← Overlay OBS (Lua)
 │   ├── livechaos_overlay.lua     polling HTTP + atualização de fontes
 │   └── sources.json              nomes das fontes OBS
+├── MyLoader/                  ← Delay loader C++ (evita crash de inicialização)
+│   ├── MyLoader.cpp              aguarda 5s e carrega ScriptHookDotNet em thread separada
+│   ├── MyLoader.h
+│   ├── MyLoader.sln
+│   └── MyLoader.vcxproj
+├── Main_GTAIV_Folder/         ← Binários ASI necessários na raiz do GTA IV
+│   ├── MyLoader.asi              compilado de MyLoader/ (build Release x86)
+│   ├── aCompleteEditionHook.asi  hook de compatibilidade para Complete Edition
+│   └── ScriptHookDotNet.asi      runtime ScriptHook .NET
 ├── ChaosScript/               ← Mod legado (monolítico, mantido para referência)
 │   ├── ChaosScript.cs
 │   └── ChaosScript.csproj
@@ -285,9 +294,10 @@ O script `Install-LiveChaos.ps1` detecta a instalação do GTA IV (Steam ou Rock
 ```
 
 O script copia:
-1. `LiveChaos.net.dll`, `IVSDKDotNetWrapper.dll`, `Newtonsoft.Json.dll` → `<GTAIV>\scripts\`
-2. `livechaos-server.exe` + `config.toml` → `<GTAIV>\`
-3. `livechaos_overlay.lua` + `sources.json` → `<OBS>\` (se detectado)
+1. `MyLoader.asi`, `aCompleteEditionHook.asi`, `ScriptHookDotNet.asi` → `<GTAIV>\` (raiz)
+2. `LiveChaos.net.dll`, `IVSDKDotNetWrapper.dll`, `Newtonsoft.Json.dll` → `<GTAIV>\scripts\`
+3. `livechaos-server.exe` + `config.toml` → `<GTAIV>\`
+4. `livechaos_overlay.lua` + `sources.json` → `<OBS>\` (se detectado)
 
 ---
 
@@ -309,7 +319,9 @@ Grand Theft Auto IV/
     ├── GTAIV.exe
     ├── dinput8.dll                  ← ASI Loader (instale manualmente)
     ├── IVSDKDotNet.asi              ← IV-SDK .NET loader (instale manualmente)
-    ├── ScriptHookDotNet.asi         ← ScriptHook.NET (instale manualmente)
+    ├── aCompleteEditionHook.asi     ← ✅ este repositório (Main_GTAIV_Folder/)
+    ├── MyLoader.asi                 ← ✅ este repositório (Main_GTAIV_Folder/)
+    ├── ScriptHookDotNet.asi         ← ✅ este repositório (Main_GTAIV_Folder/)
     └── scripts/                    ← crie esta pasta se não existir
         ├── LiveChaos.net.dll        ← ✅ este repositório (scripts/)
         ├── IVSDKDotNetWrapper.dll   ← ✅ este repositório (scripts/)
@@ -318,20 +330,27 @@ Grand Theft Auto IV/
         └── ScriptHookDotNet_IVSDK.dll  ← ✅ este repositório (scripts/)
 ```
 
-> **Itens marcados com ✅** já estão incluídos na pasta `scripts/` deste repositório — basta copiar.  
+> **Itens marcados com ✅** já estão incluídos neste repositório — basta copiar para o caminho indicado.  
 > **Itens sem marcação** devem ser baixados e instalados manualmente (veja os pré-requisitos).
 
 ### Passo a passo
 
-**Passo 1 — Instalar os pré-requisitos na raiz do GTA IV**
+**Passo 1 — Copiar os ASI loaders para a raiz do GTA IV**
 
-Baixe e instale na pasta raiz (`GTAIV/`):
+Copie o conteúdo da pasta `Main_GTAIV_Folder/` deste repositório para a raiz do GTA IV (`GTAIV/`):
+
+| Arquivo | Descrição |
+|---------|----------|
+| `MyLoader.asi` | Delay loader customizado (código em `MyLoader/`) — aguarda 5s e carrega o `ScriptHookDotNet.asi` em thread separada, evitando crash na inicialização |
+| `aCompleteEditionHook.asi` | Hook de compatibilidade para a Complete Edition |
+| `ScriptHookDotNet.asi` | Runtime do ScriptHook .NET |
+
+Além disso, instale manualmente na raiz (`GTAIV/`):
 
 | Arquivo | Onde baixar |
 |---------|-------------|
-| `dinput8.dll` (ASI Loader) | [Silent's ASI Loader](https://gtaforums.com/topic/523982-relopensrcsa-asi-loader/) |
+| `dinput8.dll` (ASI Loader alternativo) | [Silent's ASI Loader](https://gtaforums.com/topic/523982-relopensrcsa-asi-loader/) |
 | `IVSDKDotNet.asi` | [IV-SDK .NET Releases](https://github.com/ClonkAndre/IV-SDK-DotNet/releases) |
-| `ScriptHookDotNet.asi` | Incluído no pacote do IV-SDK .NET |
 
 **Passo 2 — Copiar as DLLs do mod**
 
@@ -357,14 +376,14 @@ scripts/
 └── ScriptHookDotNet_IVSDK.dll
 ```
 
-**Passo 4 — Iniciar o bot e o jogo**
+**Passo 4 — Iniciar o servidor e o jogo**
 
 ```bash
-cd bot
-python chaos_bot.py   # inicie o bot ANTES de abrir o GTA IV
+# Inicie o servidor Go ANTES de abrir o GTA IV:
+TWITCH_OAUTH=oauth:xxx bin/livechaos-server
 ```
 
-Abra o GTA IV. O mod conecta-se automaticamente ao bot em `127.0.0.1:9999`.
+Abra o GTA IV. O mod conecta-se automaticamente ao servidor via named pipe.
 
 > **Dica:** Se o mod não carregar, verifique se o `IVSDKDotNet/` existe dentro de `GTAIV/scripts/`. O IV-SDK .NET o cria na primeira execução. Consulte `GTAIV/scripts/IVSDKDotNet/logs/` para mensagens de erro.
 
