@@ -5,6 +5,7 @@ package vote
 import (
 	"context"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,17 +17,27 @@ type Aggregator struct {
 	mu          sync.Mutex
 	votes       map[string]int
 	voters      map[string]bool
+	spamHistory map[string][]time.Time
+	spamBlock   map[string]time.Time
 	pool        []string
 	cycleDur    time.Duration
 	cooldownDur time.Duration
 	bus         *state.Bus
 }
 
+const (
+	spamWindow      = 5 * time.Second
+	spamMaxAttempts = 4
+	spamBlockFor    = 20 * time.Second
+)
+
 // NewAggregator creates an Aggregator ready to run.
 func NewAggregator(pool []string, cycleDur, cooldownDur time.Duration, bus *state.Bus) *Aggregator {
 	return &Aggregator{
 		votes:       make(map[string]int),
 		voters:      make(map[string]bool),
+		spamHistory: make(map[string][]time.Time),
+		spamBlock:   make(map[string]time.Time),
 		pool:        pool,
 		cycleDur:    cycleDur,
 		cooldownDur: cooldownDur,
@@ -40,16 +51,57 @@ func (a *Aggregator) CastVote(user, effectID string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.voters[user] {
+	userKey := normalizeUser(user)
+	if userKey == "" {
+		return
+	}
+
+	if !a.allowVoteAttempt(userKey, time.Now()) {
+		return
+	}
+
+	if a.voters[userKey] {
 		return
 	}
 	for _, e := range a.pool {
 		if e == effectID {
-			a.voters[user] = true
+			a.voters[userKey] = true
 			a.votes[effectID]++
 			return
 		}
 	}
+}
+
+func (a *Aggregator) allowVoteAttempt(user string, now time.Time) bool {
+	if blockedUntil, ok := a.spamBlock[user]; ok {
+		if blockedUntil.After(now) {
+			return false
+		}
+		delete(a.spamBlock, user)
+	}
+
+	history := a.spamHistory[user]
+	cutoff := now.Add(-spamWindow)
+	kept := history[:0]
+	for _, t := range history {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	kept = append(kept, now)
+	if len(kept) > spamMaxAttempts {
+		a.spamBlock[user] = now.Add(spamBlockFor)
+		delete(a.spamHistory, user)
+		return false
+	}
+	a.spamHistory[user] = kept
+	return true
+}
+
+func normalizeUser(user string) string {
+	user = strings.ToLower(strings.TrimSpace(user))
+	user = strings.TrimPrefix(user, "@")
+	return user
 }
 
 // Run starts the voting cycle loop. Blocks until ctx is cancelled.
